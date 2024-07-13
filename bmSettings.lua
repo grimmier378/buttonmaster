@@ -1,9 +1,15 @@
 local mq            = require('mq')
 local btnUtils      = require('lib.buttonUtils')
 
-local settings_base = mq.configDir .. '/ButtonMaster'
-local settings_path = settings_base .. '.lua '
+local function getSettingsPath()
+    return string.format("%s/ButtonMaster_%s_%s.lua", mq.configDir, mq.TLO.EverQuest.Server(), mq.TLO.Me.DisplayName())
+end
 
+local function getBackupPath()
+    return string.format("%s/Buttonmaster-Backups/ButtonMaster-backup-%s-%s-%s.lua", mq.configDir(), mq.TLO.EverQuest.Server(), mq.TLO.Me.DisplayName(), os.date("%m-%d-%y-%H-%M-%S"))
+end
+
+local settings_path = getSettingsPath()
 
 local BMSettings                 = {}
 BMSettings.__index               = BMSettings
@@ -12,7 +18,7 @@ BMSettings.CharConfig            = string.format("%s_%s", mq.TLO.EverQuest.Serve
 BMSettings.Constants             = {}
 
 BMSettings.Globals               = {}
-BMSettings.Globals.Version       = 7
+BMSettings.Globals.Version       = 8
 BMSettings.Globals.CustomThemes  = {}
 
 BMSettings.Constants.TimerTypes  = {
@@ -39,7 +45,6 @@ function BMSettings.new()
     local newSettings      = setmetatable({}, BMSettings)
     newSettings.CharConfig = string.format("%s_%s", mq.TLO.EverQuest.Server(), mq.TLO.Me.DisplayName())
 
-
     local config, err = loadfile(mq.configDir .. '/Button_Master_Theme.lua')
     if not err and config then
         BMSettings.Globals.CustomThemes = config()
@@ -53,8 +58,7 @@ function BMSettings:SaveSettings(doBroadcast)
 
     if not self.settings.LastBackup or os.time() - self.settings.LastBackup > 3600 * 24 then
         self.settings.LastBackup = os.time()
-        mq.pickle(mq.configDir .. "/Buttonmaster-Backups/ButtonMaster-backup-" .. os.date("%m-%d-%y-%H-%M-%S") .. ".lua",
-            self.settings)
+        mq.pickle(getBackupPath(), self.settings)
     end
 
     mq.pickle(settings_path, self.settings)
@@ -65,8 +69,7 @@ function BMSettings:SaveSettings(doBroadcast)
             from = mq.TLO.Me.DisplayName(),
             script = "ButtonMaster",
             event = "SaveSettings",
-            newSettings =
-                self.settings,
+            newSettings = self.settings,
         })
     end
 end
@@ -85,8 +88,7 @@ function BMSettings:GetSetting(settingKey)
 
     -- character sertting
     if self.settings.Characters[self.CharConfig] ~= nil and self.settings.Characters[self.CharConfig][settingKey] ~= nil then
-        return self.settings.Characters[self.CharConfig]
-            [settingKey]
+        return self.settings.Characters[self.CharConfig][settingKey]
     end
 
     -- not found.
@@ -347,6 +349,17 @@ function BMSettings:ConvertToLatestConfigVersion()
             btnUtils.Output("\atUpgraded to \amv%d\at!", BMSettings.Globals.Version)
         end
     end
+
+    -- version 8
+    -- Migrate to per-character config file
+    if (self.settings.Version or 0) < 8 then
+        local perCharSettingsPath = getSettingsPath()
+        mq.pickle(perCharSettingsPath, self.settings)
+        self.settings.Version = 8
+        self:SaveSettings(true)
+        btnUtils.Output("\atUpgraded to \amv8\at!")
+    end
+
 end
 
 function BMSettings:InvalidateButtonCache()
@@ -358,56 +371,67 @@ end
 function BMSettings:LoadSettings()
     local config, err = loadfile(settings_path)
     if err or not config then
-        local old_settings_path = settings_path:gsub(".lua", ".ini")
-        printf("\ayUnable to load global settings file(%s), creating a new one from legacy ini(%s) file!",
-            settings_path, old_settings_path)
-        if btnUtils.file_exists(old_settings_path) then
-            self.settings = btnUtils.loadINI(old_settings_path)
-            self:SaveSettings(true)
+        -- Try to load the old Lua settings file
+        local old_lua_settings_path = mq.configDir .. '/ButtonMaster.lua'
+        config, err = loadfile(old_lua_settings_path)
+        
+        if err or not config then
+            -- Fallback to loading the old INI settings file if old Lua settings file is not found
+            local old_ini_settings_path = mq.configDir .. '/ButtonMaster.ini'
+            printf("\ayUnable to load per-character settings file(%s), trying old Lua file(%s) or legacy INI file(%s).", settings_path, old_lua_settings_path, old_ini_settings_path)
+            if btnUtils.file_exists(old_ini_settings_path) then
+                self.settings = btnUtils.loadINI(old_ini_settings_path)
+                self:SaveSettings(true)
+            else
+                printf("\ayUnable to load legacy settings file(%s), creating a new config!", old_ini_settings_path)
+                self.settings = {
+                    Version = BMSettings.Globals.Version,
+                    Sets = {
+                        ['Primary'] = { 'Button_1', 'Button_2', 'Button_3' },
+                        ['Movement'] = { 'Button_4' },
+                    },
+                    Buttons = {
+                        Button_1 = {
+                            Label = 'Burn (all)',
+                            Cmd = '/bcaa //burn\n/timed 500 /bcaa //burn',
+                        },
+                        Button_2 = {
+                            Label = 'Pause (all)',
+                            Cmd = '/bcaa //multi ; /twist off ; /mqp on',
+                        },
+                        Button_3 = {
+                            Label = 'Unpause (all)',
+                            Cmd = '/bcaa //mqp off',
+                        },
+                        Button_4 = {
+                            Label = 'Nav Target (bca)',
+                            Cmd = '/bca //nav id ${Target.ID}',
+                        },
+                    },
+                    Characters = {
+                        [self.CharConfig] = {
+                            Windows = { [1] = { Visible = true, Pos = { x = 10, y = 10 }, Sets = {}, Locked = false } },
+                        },
+                    },
+                }
+                self:SaveSettings(true)
+            end
         else
-            printf("\ayUnable to load legacy settings file(%s), creating a new config!", old_settings_path)
-            self.settings = {
-                Version = BMSettings.Globals.Version,
-                Sets = {
-                    ['Primary'] = { 'Button_1', 'Button_2', 'Button_3', },
-                    ['Movement'] = { 'Button_4', },
-                },
-                Buttons = {
-                    Button_1 = {
-                        Label = 'Burn (all)',
-                        Cmd = '/bcaa //burn\n/timed 500 /bcaa //burn',
-                    },
-                    Button_2 = {
-                        Label = 'Pause (all)',
-                        Cmd = '/bcaa //multi ; /twist off ; /mqp on',
-                    },
-                    Button_3 = {
-                        Label = 'Unpause (all)',
-                        Cmd = '/bcaa //mqp off',
-                    },
-                    Button_4 = {
-                        Label = 'Nav Target (bca)',
-                        Cmd = '/bca //nav id ${Target.ID}',
-                    },
-                },
-                Characters = {
-                    [self.CharConfig] = {
-                        Windows = { [1] = { Visible = true, Pos = { x = 10, y = 10, }, Sets = {}, Locked = false, }, },
-                    },
-                },
-            }
+            -- If old Lua settings file is found, use it and save it as the new per-character file
+            self.settings = config()
             self:SaveSettings(true)
         end
     else
+        -- If per-character Lua settings file is found, use it
         self.settings = config()
     end
 
-    -- if we need to upgrade anyway then bail after the load.
+    -- If we need to upgrade, bail after the load
     if self:NeedUpgrade() then return false end
 
+    -- Ensure character-specific settings are initialized
     self.settings.Characters[self.CharConfig] = self.settings.Characters[self.CharConfig] or {}
-    self.settings.Characters[self.CharConfig].Windows = self.settings.Characters[self.CharConfig].Windows or
-        { [1] = { Visible = true, Pos = { x = 10, y = 10, }, Sets = {}, Locked = false, }, }
+    self.settings.Characters[self.CharConfig].Windows = self.settings.Characters[self.CharConfig].Windows or { [1] = { Visible = true, Pos = { x = 10, y = 10 }, Sets = {}, Locked = false } }
 
     self:InvalidateButtonCache()
     return true
