@@ -10,17 +10,33 @@
         Shwebro, Kevbro, RYN
 --]]
 
-local version          = "2.3"
-local mq               = require('mq')
+local version           = "2.3"
+local mq                = require('mq')
+local Module            = {}
+Module.ActorMailBox     = 'buttonmaster'
+Module.IsRunning        = false
+Module.Name             = 'ButtonMaster'
 
-ButtonActors           = require 'actors'
-Icons                  = require('mq.ICONS')
-BMSettings             = require('bmSettings').new()
-BMEditPopup            = require('bmEditButtonPopup')
+---@diagnostic disable-next-line:undefined-global
+Module.Path             = MyUI_Path ~= nil and MyUI_Path or string.format("%s/%s/", mq.luaDir, Module.Name)
 
-local BMHotbarClass    = require('bmHotbarClass')
+local FrameTime         = mq.gettime()
+---@diagnostic disable-next-line:undefined-global
+local loadedExeternally = MyUI_ScriptName ~= nil and true or false
+if not loadedExeternally then
+    MyUI_Icons = require('mq.ICONS')
+    MyUI_Actor = require('actors')
+    MyUI_CharLoaded = mq.TLO.Me.DisplayName()
+end
+
+ButtonActors           = MyUI_Actor
+Icons                  = MyUI_Icons
+BMSettings             = require('bm.bmSettings').new()
+BMEditPopup            = require('bm.bmEditButtonPopup')
+
+local BMHotbarClass    = require('bm.bmHotbarClass')
 local btnUtils         = require('lib.buttonUtils')
-local BMButtonHandlers = require('bmButtonHandlers')
+local BMButtonHandlers = require('bm.bmButtonHandlers')
 
 -- globals
 BMHotbars              = {}
@@ -82,7 +98,7 @@ local function BindBtnExec(set, index)
     BMButtonHandlers.Exec(Button)
 end
 
-local function ButtonGUI()
+function Module.RenderGUI()
     if not openGUI then return end
     if not BMSettings:GetCharConfig() then return end
 
@@ -121,6 +137,11 @@ local function Setup()
 
     BMEditPopup:CloseEditPopup()
     btnUtils.Output('\ayButton Master v%s by (\a-to_O\ay) Derple, Special.Ed (\a-to_O\ay) - \atLoaded!', version)
+
+    if not loadedExeternally then
+        mq.imgui.init('ButtonGUI', Module.RenderGUI)
+    end
+    Module.IsRunning = true
 end
 
 local args = ... or ""
@@ -129,9 +150,8 @@ if args:lower() == "upgrade" then
     mq.exit()
 end
 
-local function GiveTime()
-    while mq.TLO.MacroQuest.GameState() == "INGAME" do
-        mq.delay(10)
+function Module.MainLoop()
+    if mq.gettime() - FrameTime < 10 then
         if BMReloadSettings then
             BMReloadSettings = false
             BMSettings:LoadSettings()
@@ -154,8 +174,8 @@ local function GiveTime()
                 end
             end
         end
+        FrameTime = mq.gettime()
     end
-    btnUtils.Output('\arNot in game, stopping button master.\ax')
 end
 
 -- Global Messaging callback
@@ -167,7 +187,7 @@ local script_actor = ButtonActors.register(function(message)
 
     btnUtils.Debug("MSG! " .. msg["script"] .. " " .. msg["from"])
 
-    if msg["from"] == mq.TLO.Me.DisplayName() then
+    if msg["from"] == MyUI_CharLoaded then
         return
     end
     if msg["script"] ~= "ButtonMaster" then
@@ -201,10 +221,29 @@ if BMSettings:NeedUpgrade() then
     mq.exit()
 end
 
+function Module.LocalLoop()
+    while mq.TLO.MacroQuest.GameState() == "INGAME" do
+        mq.delay(1)
+        Module.MainLoop()
+    end
+    btnUtils.Output('\arNot in game, stopping button master.\ax')
+end
+
+function Module.Unload()
+    mq.unbind('/btn')
+    mq.unbind('/btnexec')
+    mq.unbind('/btncopy')
+    ButtonActors = nil
+end
+
 -- Make sure to start after the settings are validated.
-mq.imgui.init('ButtonGUI', ButtonGUI)
+
 mq.bind('/btn', BindBtn)
 mq.bind('/btnexec', BindBtnExec)
 mq.bind('/btncopy', BindBtnCopy)
 
-GiveTime()
+if not loadedExeternally then
+    Module.LocalLoop()
+end
+
+return Module
