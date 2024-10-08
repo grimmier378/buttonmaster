@@ -196,9 +196,8 @@ function BMSettings:ConvertToLatestConfigVersion()
         -- version 2
         -- Run through all settings and make sure they are in the new format.
         for key, value in pairs(self.settings or {}) do
-            local valueType = type(value) or ''
             -- TODO: Make buttons a seperate table instead of doing the string compare crap.
-            if valueType == 'table' then
+            if type(value) == 'table' then
                 if key:find("^(Button_)") and value.Cmd1 or value.Cmd2 or value.Cmd3 or value.Cmd4 or value.Cmd5 then
                     btnUtils.Output("Key: %s Needs Converted!", key)
                     value.Cmd  = string.format("%s\n%s\n%s\n%s\n%s\n%s", value.Cmd or '', value.Cmd1 or '',
@@ -226,13 +225,12 @@ function BMSettings:ConvertToLatestConfigVersion()
         newSettings.Characters = {}
         newSettings.Global = self.settings.Global
         for key, value in pairs(self.settings) do
-            local typeValue = type(value) or ''
             local sStart, sEnd = key:find("^Button_")
             if sStart then
                 local newKey = key --key:sub(sEnd + 1)
                 btnUtils.Output("Old Key: \am%s\ax, New Key: \at%s\ax", key, newKey)
                 newSettings.Buttons[newKey] = newSettings.Buttons[newKey] or {}
-                if typeValue == 'table' then
+                if type(value) == 'table' then
                     for subKey, subValue in pairs(value) do
                         newSettings.Buttons[newKey][subKey] = tostring(subValue)
                     end
@@ -251,11 +249,10 @@ function BMSettings:ConvertToLatestConfigVersion()
                 local newKey = key:sub(sStart + 5, sEnd - 7)
                 btnUtils.Output("Old Key: \am%s\ax, New Key: \at%s\ax", key, newKey)
                 newSettings.Characters[newKey] = newSettings.Characters[newKey] or {}
-                if typeValue == 'table' then
+                if type(value) == 'table' then
                     for subKey, subValue in pairs(value) do
-                        local subType = type(subValue) or ''
                         newSettings.Characters[newKey].Sets = newSettings.Characters[newKey].Sets or {}
-                        if subType == "number" then
+                        if type(subKey) == "number" then
                             table.insert(newSettings.Characters[newKey].Sets, subValue)
                         else
                             newSettings.Characters[newKey][subKey] = subValue

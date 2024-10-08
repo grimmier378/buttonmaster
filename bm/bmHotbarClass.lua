@@ -102,7 +102,6 @@ function BMHotbarClass:StartTheme()
 
     if theme ~= nil then
         for n, t in pairs(theme) do
-            local valType = type(t) or ''
             if t.color then
                 ImGui.PushStyleColor(ImGuiCol[t.element], t.color.r, t.color.g, t.color.b, t.color.a)
                 themeColorPop = themeColorPop + 1
@@ -110,7 +109,7 @@ function BMHotbarClass:StartTheme()
                 ImGui.PushStyleVar(ImGuiStyleVar[t.stylevar], t.value)
                 themeStylePop = themeStylePop + 1
             else
-                if valType == 'table' then
+                if type(t) == 'table' then
                     if t['Dynamic_Color'] then
                         local ret, colors = btnUtils.EvaluateLua(t['Dynamic_Color'])
                         if ret then
@@ -120,9 +119,8 @@ function BMHotbarClass:StartTheme()
                         end
                     elseif t['Dynamic_Var'] then
                         local ret, var = btnUtils.EvaluateLua(t['Dynamic_Var'])
-                        local varType = type(var) or ''
                         if ret then
-                            if varType == 'table' then
+                            if type(var) == 'table' then
                                 ---@diagnostic disable-next-line: param-type-mismatch, deprecated
                                 ImGui.PushStyleVar(ImGuiStyleVar[n], unpack(var))
                             else
@@ -134,8 +132,7 @@ function BMHotbarClass:StartTheme()
                     elseif #t == 4 then
                         local colors = btnUtils.shallowcopy(t)
                         for i = 1, 4 do
-                            local colorType = type(colors[i]) or ''
-                            if colorType == 'string' then
+                            if type(colors[i]) == 'string' then
                                 local ret, color = btnUtils.EvaluateLua(colors[i])
                                 if ret then
                                     colors[i] = color
@@ -874,9 +871,8 @@ function BMHotbarClass:RenderImportButtonPopup()
         ImGui.SameLine()
 
         if self.importTextChanged then
-            local objType = type(self.decodedObject) or ''
             self.validDecode, self.decodedObject = btnUtils.decodeTable(self.importText)
-            self.validDecode = objType == 'table' and self.validDecode or false
+            self.validDecode = type(self.decodedObject) == 'table' and self.validDecode or false
         end
 
         if self.validDecode then
