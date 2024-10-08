@@ -71,12 +71,13 @@ function BMButtonHandlers.GetButtonCooldown(Button, cacheUpdate)
         end
         if Button.ToggleCheck and Button.ToggleCheck:len() > 0 then
             success, result = btnUtils.EvaluateLua(Button.ToggleCheck)
+            local resultType = type(result) or ''
             if not success then
                 btnUtils.Output("Failed to run ToggleCheck for Button(%s): %s", Button.Label, Button.ToggleCheck)
                 btnUtils.Output("RunEnv was:\n%s", Button.ToggleCheck)
                 Button.CachedToggleLocked = false
             else
-                Button.CachedToggleLocked = type(result) == 'boolean' and result or false
+                Button.CachedToggleLocked = resultType == 'boolean' and result or false
             end
         end
     elseif Button.TimerType == "Seconds Timer" then
