@@ -1,7 +1,7 @@
 local mq                            = require('mq')
 local btnUtils                      = require('lib.buttonUtils')
 local BMButtonHandlers              = require('bm.bmButtonHandlers')
-local themes                        = require('defaults.themes')
+local themes                        = require('defaults.bmThemes')
 
 local WINDOW_SETTINGS_ICON_SIZE     = 22
 
