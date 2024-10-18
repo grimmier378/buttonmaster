@@ -16,7 +16,11 @@ BMButtonEditor.tmpButton           = nil
 
 BMButtonEditor.selectedTimerType   = 1
 BMButtonEditor.selectedUpdateRate  = 1
-
+---@diagnostic disable-next-line:undefined-field
+BMButtonEditor.textEditor          = ImGui.TextEditor.new("##TextEditor")
+BMButtonEditor.textEditor:SetSyntax('lua')
+---@diagnostic disable-next-line:undefined-global
+BMButtonEditor.textEditor.windowFlags = bit32.bor(TextEditorWindowFlags.ShowLineNumbers, TextEditorWindowFlags.WrapText, TextEditorWindowFlags.ShowIndicators)
 function BMButtonEditor:RenderEditButtonPopup()
     if not self.editButtonPopupOpen then
         picker:SetClosed()
@@ -108,8 +112,9 @@ function BMButtonEditor:RenderEditButtonPopup()
                     ButtonKey                                                                      -- add the button key for this button set index
                 BMSettings:GetSettings().Buttons[ButtonKey] = btnUtils.shallowcopy(self.tmpButton) -- store the tmp button into the settings table
                 BMSettings:GetSettings().Buttons[ButtonKey].Unassigned = nil                       -- clear the unassigned flag
-
                 BMSettings:SaveSettings(true)
+                BMSettings:updateButtonDB(btnUtils.shallowcopy(self.tmpButton), ButtonKey)
+                BMSettings:updateSetDB(self.editButtonSet, self.editButtonIndex, ButtonKey)
                 self.editButtonUIChanged = false
             else
                 btnUtils.Output("\arSave failed.  Button Label cannot be empty.")
@@ -140,6 +145,8 @@ function BMButtonEditor:RenderEditButtonPopup()
                 BMSettings:GetSettings().Buttons[ButtonKey].Unassigned = nil                       -- clear the unassigned flag
 
                 BMSettings:SaveSettings(true)
+                BMSettings:updateButtonDB(btnUtils.shallowcopy(self.tmpButton), ButtonKey)
+                BMSettings:updateSetDB(self.editButtonSet, self.editButtonIndex, ButtonKey)
                 self.editButtonUIChanged = false
             else
                 btnUtils.Output("\arSave failed.  Button Label cannot be empty.")
@@ -152,6 +159,7 @@ end
 
 function BMButtonEditor:CloseEditPopup()
     picker:SetClosed()
+    self.textEditor:Clear()
     self.editButtonPopupOpen = false
     self.editButtonIndex = 0
     self.editButtonSet = ""
@@ -163,6 +171,7 @@ function BMButtonEditor:OpenEditPopup(Set, Index)
     self.editButtonSet = Set
     self.selectedTimerType = 1
     self.selectedUpdateRate = 1
+
     local button = BMSettings:GetButtonBySetIndex(Set, Index)
     self.tmpButton = btnUtils.shallowcopy(button)
 
@@ -180,6 +189,7 @@ function BMButtonEditor:OpenEditPopup(Set, Index)
             end
         end
     end
+    self.textEditor:Clear()
 end
 
 function BMButtonEditor:CreateButtonFromCursor(Set, Index)
@@ -282,8 +292,15 @@ function BMButtonEditor:RenderButtonEditUI(renderButton, enableShare, enableEdit
     local footerHeight = 35
     local editHeight = ImGui.GetWindowHeight() - yPos - footerHeight
     ImGui.PushFont(ImGui.ConsoleFont)
-    renderButton.Cmd, textChanged = ImGui.InputTextMultiline("##_Cmd_Edit", renderButton.Cmd or "",
-        ImVec2(ImGui.GetWindowWidth() * 0.98, editHeight), ImGuiInputTextFlags.AllowTabInput)
+    -- renderButton.Cmd, textChanged = ImGui.InputTextMultiline("##_Cmd_Edit", renderButton.Cmd or "",
+    --     ImVec2(ImGui.GetWindowWidth() * 0.98, editHeight), ImGuiInputTextFlags.AllowTabInput)
+    self.textEditor:Render(ImVec2(ImGui.GetWindowWidth() * 0.98, editHeight))
+    local textContents = self.textEditor.text ~= '' and self.textEditor.text or (renderButton.Cmd and renderButton.Cmd or "")
+    self.textEditor:LoadContents(textContents)
+    if self.textEditor.text ~= renderButton.Cmd then
+        textChanged = true
+        renderButton.Cmd = self.textEditor.text
+    end
     ImGui.PopFont()
     self.editButtonUIChanged = self.editButtonUIChanged or textChanged
 end
